@@ -1,0 +1,23 @@
+Package: HealthyOralMicrobiome
+Type: Package
+Title: Analysis for Healthy Oral Microbiome Atlantic PATH Cohort
+Version: 0.1.0
+Author: Jacob Nearing
+Maintainer: Jacob Nearing <jacob.nearing@dal.ca>
+Description: This package contains all of the code that was used to produce the results in "...."
+License: CC0
+Encoding: UTF-8
+LazyData: true
+Suggests: 
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
+RoxygenNote: 6.1.99.9001
+Imports: 
+    vegan,
+    dplyr,
+    tibble,
+    gplots,
+    corncob,
+    cowplot
+Remotes: nearinj/corncob
