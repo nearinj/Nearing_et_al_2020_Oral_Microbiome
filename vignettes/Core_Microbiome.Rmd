@@ -25,7 +25,6 @@ library(HealthyOralMicrobiome)
 Metadata <- HealthyOralMicrobiome::Healthy_Metadata
 dim(Metadata)
 
-write.csv(Metadata, file="~/Private/Figures_R2/Metadata_to_release.csv")
 
 ASV_Rare <- HealthyOralMicrobiome::Healthy_ASV_table_Rare
 dim(ASV_Rare)
