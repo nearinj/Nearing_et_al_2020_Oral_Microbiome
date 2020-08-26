@@ -1,0 +1,201 @@
+---
+title: "RDA_Analysis_Final"
+author: "Jacob T. Nearing"
+date: "8/10/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(HealthyOralMicrobiome)
+library(vegan)
+library(ggord)
+library(cowplot)
+library(ggplot2)
+library(tidyverse)
+```
+
+
+```{r}
+Metadata <- HealthyOralMicrobiome::Healthy_Metadata
+dim(Metadata)
+
+#load in Genus table
+Genus_tab <- HealthyOralMicrobiome::Healthy_Genus_Table
+dim(Genus_tab)
+
+### Filter the samples
+Comp_Genus_data <- Filt_samples(depth=5000, setType="complete", Taxa_table = Genus_tab, Metadata = Metadata, parallel = 20, cutoff_prop = 0.1)
+
+
+features_to_test <- c("A_SDC_AGE_CALC",
+                      "PM_STANDING_HEIGHT_AVG",
+                      "PM_WAIST_AVG",
+                      "PM_BIOIMPED_WEIGHT",
+                      "PM_WAIST_HIP_RATIO",
+                      "PM_BIOIMPED_FFM",
+                      "SALT_SEASONING",
+                      "NUTS_SEEDS_SERVINGS_PER_DAY",
+                      "NUT_VEG_DAY_QTY",
+                      "REFINED_GRAIN_SERVINGS_DAY_QTY",
+                      "A_SLE_LIGHT_EXP",
+                      "A_SDC_GENDER",
+                      "PM_BIOIMPED_BMI",
+                      "NUT_JUICE_DAY_QTY",
+                      "A_HS_DENTAL_VISIT_LAST")
+
+
+test_metadata <- Comp_Genus_data[[1]][,c(features_to_test)]
+
+test_metadata_scale<- test_metadata %>% rownames_to_column('sample_name') %>%
+  mutate_if(is.numeric, scale) %>%
+  column_to_rownames('sample_name')
+
+### okay lets test a couple different ways
+CLR_Genus_data <- data.frame(apply(Comp_Genus_data[[2]] + 1, 2, function(x){log(x) - mean(log(x))}))
+Genus_data <- data.frame(t(Comp_Genus_data[[2]]))
+
+Genus_data_clr <- data.frame(t(CLR_Genus_data))
+
+
+taxa_names <- colnames(Genus_data_clr)
+colnames(Genus_data_clr) <- c(1:91)
+
+colnames(test_metadata_scale) <- c("Age", "Height", "Waist Size", "Weight", "Waist Hip Ratio", "Fat Free Mass", "Salt Usage", "Nut/Seed Servings",
+                             "Vegetable Servings", "Refined Grain Servings", "Sleeping Light Exposure", "Female", "Body Mass Index", "Juice Servings",
+                             "Last Dental Visit")
+
+CLR_RDA <- rda(Genus_data_clr ~., test_metadata_scale)
+CLR_RDA
+
+anova.cca(CLR_RDA, by='axis', step=1000)
+
+## report these in the manuscript
+#RDA1 = 0.001,
+#RDA2 = 0.081
+
+taxa_names
+Phylums <- gsub("D_0__.*D_1__", "", taxa_names)
+Phylums <- gsub("D_2__.*", "", Phylums)
+Phylums <- gsub("\\.", "", Phylums)
+Phylums 
+
+
+#set colors for each phylum
+taxa_colors <- vector()
+for(taxa in 1:length(Phylums)){
+  
+  if(Phylums[[taxa]] == "Actinobacteria"){
+      taxa_colors[[taxa]] <- "#7f0000"
+  }else if(Phylums[[taxa]]=="Bacteroidetes"){
+    taxa_colors[[taxa]] <- "#00008b"
+  }else if(Phylums[[taxa]]=="Cyanobacteria"){
+    taxa_colors[[taxa]] <- "#ff0000"
+  }else if(Phylums[[taxa]]=="Firmicutes"){
+    taxa_colors[[taxa]] <- "#ff8c00"
+  }else if(Phylums[[taxa]]=="Fusobacteria"){
+    taxa_colors[[taxa]] <- "#434a07"
+  }else if(Phylums[[taxa]]=="Proteobacteria"){
+    taxa_colors[[taxa]] <- "#ba55d3"
+  }else if(Phylums[[taxa]]=="Spirochaetes"){
+    taxa_colors[[taxa]] <- "#00ffff"
+  }else if(Phylums[[taxa]]=="Synergistetes"){
+    taxa_colors[[taxa]] <- "#0000ff"
+  }else if(Phylums[[taxa]]=="Tenericutes"){
+    taxa_colors[[taxa]] <- "#ff00ff"
+  }else if(Phylums[[taxa]]=="Epsilonbacteraeota"){
+    taxa_colors[[taxa]] <- "#ba55d3"
+  }else if(Phylums[[taxa]]=="Patescibacteria"){
+    taxa_colors[[taxa]] <- "#1e90ff"
+  }else
+    print(taxa)
+}
+
+
+
+
+CLR_RDA_Ord <- ggord(CLR_RDA, size=.3, addsize=4.5, ptslab=T, repel=T, labcol="black", shape=2, pch=5, addcol=taxa_colors, cols="blue") +theme(plot.margin = unit(c(.2,.2,.2,8), "cm"))
+CLR_RDA_Ord
+
+
+
+
+
+
+Weighted_Uni_Effectr_Size <- readRDS("~/Private/Sequences/Redo_Combined_Data/deblur/Re_sub_figures/Weighted_Uni_effect_size.rds")
+Weighted_Uni_Effectr_Size <- Weighted_Uni_Effectr_Size + theme_cowplot() + theme(plot.title = element_text(hjust=0.5)) + theme(strip.background = element_blank(), strip.text.y = element_blank()) + ylab(expression(paste(R^{2})))
+
+Bray_Curtis_Effect_size <- readRDS("~/Private/Sequences/Redo_Combined_Data/deblur/Re_sub_figures/Bray_Curtis_Effect_size.rds")
+Bray_Curtis_Effect_size <- Bray_Curtis_Effect_size + theme_cowplot() + theme(plot.title = element_text(hjust=0.5)) + theme(strip.background = element_blank(), strip.text.y = element_blank()) +ylab(expression(paste(R^{2})))
+
+panel1 <- plot_grid(Weighted_Uni_Effectr_Size, Bray_Curtis_Effect_size, labels = c("A", "B"), ncol=2)
+panel1
+
+Final_Fig2_resub <- plot_grid(panel1, CLR_RDA_Ord, rel_heights = c(.7,1.5), ncol=1, labels=c("", "C"))
+Final_Fig2_resub
+
+
+taxa_names
+taxa_renames <- gsub(".*D_4__", "", taxa_names)
+taxa_renames <- gsub("\\.D_5__", " ", taxa_renames)
+taxa_renames <- gsub("\\.", " ", taxa_renames)
+
+
+taxa_names[90]
+taxa_renames[20] <- "Bacteroidales Unclassified"
+taxa_renames[23] <- "Flavobacteriaceae Unclassified"
+taxa_renames[25] <- "Bacteroidia bacterium feline oral taxon 312"
+taxa_renames[27] <- "Chloroplast"
+taxa_renames[64] <- "Veillonellaceae Unclassified"
+taxa_renames[67] <- "SR1 bacterium oral taxon 875"
+taxa_renames[68] <- "SR1 bacterium MGEHA"
+taxa_renames[69] <- "Rhodobacteraceae Unclassified"
+taxa_renames[72] <- "Burkholderiaceae Unclassified"
+taxa_renames[77] <- "Neisseriaceae Unclassified"
+taxa_renames[84] <- "Pasteurellaceae Unclassified" 
+taxa_renames[89] <- "Firmicutes oral clone FM046"
+taxa_renames[90] <- "Mollicutes uncultured bacterium"
+taxa_renames
+
+legend_data <- data.frame("Number"=colnames(Genus_data_clr),
+                          "Name"=taxa_renames)
+legend_data
+library(grid)
+library(gridExtra)
+grid.newpage()
+theme_1 <- ttheme_minimal(core = list(fg_params = list(hjust = 0, 
+                                                           x = 0,
+                                                    fontsize = 8.5,
+                                                    col=taxa_colors[1:45]),
+                                      padding=unit.c(unit(4, "mm"),
+                                                     unit(.3, "mm"))),
+                          colhead = list(fg_params = list(fontsize = NA, 
+                                                          fontface = "bold"),
+                                         padding = unit.c(unit(0, "mm"),
+                                                          unit(0, "mm"))))
+
+g1 <- tableGrob(legend_data[1:45,], theme=theme_1, rows=NULL, cols=NULL)
+grid.newpage()
+grid.draw(g1)
+
+
+theme_2 <- ttheme_minimal(core = list(fg_params = list(hjust = 0, 
+                                                           x = 0,
+                                                    fontsize = 8.5,
+                                                    col=taxa_colors[46:91]),
+                                      padding=unit.c(unit(4, "mm"),
+                                                     unit(.3, "mm"))),
+                          colhead = list(fg_params = list(fontsize = NA, 
+                                                          fontface = "bold"),
+                                         padding = unit.c(unit(0, "mm"),
+                                                          unit(0, "mm"))))
+
+g2 <- tableGrob(legend_data[46:91,], theme=theme_2, rows=NULL, cols=NULL)
+grid.newpage()
+grid.draw(g2)
+
+
+```

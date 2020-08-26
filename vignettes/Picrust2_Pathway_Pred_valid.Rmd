@@ -1,0 +1,261 @@
+---
+title: "Picrust2_Pathway_Pred_Valid"
+author: "Jacob T. Nearing"
+date: "8/17/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(HealthyOralMicrobiome)
+library(corncob)
+library(tidyverse)
+library(gplots)
+```
+
+```{r}
+Metadata <- HealthyOralMicrobiome::Healthy_Metadata
+dim(Metadata)
+
+ASV_tab <- HealthyOralMicrobiome::Healthy_ASV_table
+
+Comp_ASV_data <- Filt_samples(depth=5000, setType="validation", Taxa_table = ASV_tab, Metadata = Metadata, parallel = 20, cutoff_prop = 0)
+
+
+EC_Predictions <- HealthyOralMicrobiome::Picrust2_Pathway_Predicitions
+
+Metadata_filt <- Metadata[colnames(Comp_ASV_data[[2]]),]
+EC_Predictions <- EC_Predictions[,colnames(Comp_ASV_data[[2]])]
+
+
+## get complete cases..
+
+
+
+
+features_to_test <- c("A_SDC_AGE_CALC",
+                      "PM_STANDING_HEIGHT_AVG",
+                      "PM_WAIST_AVG",
+                      "PM_BIOIMPED_WEIGHT",
+                      "PM_WAIST_HIP_RATIO",
+                      "PM_BIOIMPED_FFM",
+                      "SALT_SEASONING",
+                      "NUTS_SEEDS_SERVINGS_PER_DAY",
+                      "NUT_VEG_DAY_QTY",
+                      "REFINED_GRAIN_SERVINGS_DAY_QTY",
+                      "A_SLE_LIGHT_EXP",
+                      "A_SDC_GENDER",
+                      "PM_BIOIMPED_BMI",
+                      "NUT_JUICE_DAY_QTY",
+                      "A_HS_DENTAL_VISIT_LAST")
+
+scaled_metadata_filt<- Metadata_filt %>% rownames_to_column('sample_name') %>%
+  mutate_if(is.numeric, scale) %>%
+  column_to_rownames('sample_name')
+
+```
+
+
+```{r}
+#convert to ints
+EC_Predictions_x1000 <- EC_Predictions*1000
+EC_Predictions_x1000[] <- sapply(EC_Predictions_x1000, as.integer)
+
+Preds <- phyloseq::otu_table(EC_Predictions_x1000, taxa_are_rows = T)
+Metadata <- phyloseq::sample_data(scaled_metadata_filt)
+phylo <- phyloseq::phyloseq(Preds, Metadata)
+
+cl <- parallel::makeCluster(15)
+doParallel::registerDoParallel(cl)
+foreach::getDoParWorkers()
+`%dopar%` <- foreach::`%dopar%`
+
+Valid_Pathway_Res <- foreach::foreach(i=1:15) %dopar% HealthyOralMicrobiome::valid_corn_cob_analysis(features_to_test[i], scaled_metadata_filt, taxa_tab = EC_Predictions_x1000)
+
+usethis::use_data(Valid_Pathway_Res)
+
+
+```
+
+```{r}
+Valid_Pathway_Res <- HealthyOralMicrobiome::Valid_Pathway_Res
+
+features_to_test <- c("A_SDC_AGE_CALC",
+                      "PM_STANDING_HEIGHT_AVG",
+                      "PM_WAIST_AVG",
+                      "PM_BIOIMPED_WEIGHT",
+                      "PM_WAIST_HIP_RATIO",
+                      "PM_BIOIMPED_FFM",
+                      "SALT_SEASONING",
+                      "NUTS_SEEDS_SERVINGS_PER_DAY",
+                      "NUT_VEG_DAY_QTY",
+                      "REFINED_GRAIN_SERVINGS_DAY_QTY",
+                      "A_SLE_LIGHT_EXP",
+                      "A_SDC_GENDER",
+                      "PM_BIOIMPED_BMI",
+                      "NUT_JUICE_DAY_QTY",
+                      "A_HS_DENTAL_VISIT_LAST")
+
+
+Valid_scaled_Pathway_p <- list()
+
+for(i in 1:15){
+  
+  
+  Valid_scaled_Pathway_p[[i]] <- Valid_Pathway_Res[[i]]$p
+}
+
+
+### convert to DF
+
+Valid_p_df <- do.call(rbind, Valid_scaled_Pathway_p)
+Valid_p_df <- data.frame(t(Valid_p_df))
+colnames(Valid_p_df) <- features_to_test
+
+## remove pathways that were not found to be significant in the inital data analysis
+Sig_Pathways <- HealthyOralMicrobiome::Significant_Pathways
+
+Initial_P_results <- HealthyOralMicrobiome::Pathway_inital_p_value
+
+## filter to only pathways that hit the first analysis
+
+Filt_Valid_p_df <- Valid_p_df[Sig_Pathways,]
+
+identical(rownames(Filt_Valid_p_df), rownames(Initial_P_results))
+identical(colnames(Filt_Valid_p_df), colnames(Initial_P_results))
+
+### now set 1 to all features in the validation dataframe that were not found to be significant in the original analysis
+length(which(Initial_P_results >= 0.05))
+
+Filt_Valid_p_df[Initial_P_results >= 0.05] <- 1
+
+
+length(which(Filt_Valid_p_df < 0.05))
+### 94 hits total
+
+## okay now that we are done with p-values
+## okay now lets get coefs
+
+Coef_Valid_Pathway <- data.frame()
+i <- 0
+for(feat in features_to_test){
+  i <- i +1
+  if(feat=="A_SDC_GENDER"){
+    feat <- "A_SDC_GENDER2"
+  }
+  feat_name <- paste("mu.",feat,sep="")
+  for(j in 1:length(Valid_Pathway_Res[[i]]$all_models)){
+
+    #set value to NA if p-value could not be calculated due to the low abundance of that organism (discriminant taxa)
+    if(is.na(Valid_Pathway_Res[[i]]$all_models[[j]][1])){
+      Coef_Valid_Pathway[j,i] <- NA
+      
+    }else{
+      Coef_Valid_Pathway[j,i] <- Valid_Pathway_Res[[i]]$all_models[[j]]$coefficients[,1][which(rownames(Valid_Pathway_Res[[i]]$all_models[[j]]$coefficients)==feat_name)]
+    }
+  }
+}
+
+
+rownames(Coef_Valid_Pathway) <- rownames(Valid_Pathway_Res[[1]]$data@otu_table)
+colnames(Coef_Valid_Pathway) <- features_to_test
+
+#okay now we need to match up with 
+Filt_Coef_Valid_Pathway <- Coef_Valid_Pathway[Sig_Pathways,]
+dim(Filt_Coef_Valid_Pathway)
+
+identical(rownames(Filt_Coef_Valid_Pathway), rownames(Filt_Valid_p_df))
+identical(colnames(Filt_Coef_Valid_Pathway), colnames(Filt_Coef_Valid_Pathway))
+
+
+### okay set coef to 0 that are NA in Filt_Valid_p_df
+Filt_Coef_Valid_Pathway_set_na <- Filt_Coef_Valid_Pathway
+
+Filt_Coef_Valid_Pathway_set_na[is.na(Filt_Valid_p_df)] <- 0
+
+Filt_Coef_Valid_Pathway_set_na[Filt_Valid_p_df >= 0.05] <- 0
+
+length(which(Filt_Valid_p_df >= 0.05))
+
+length(which(abs(Filt_Coef_Valid_Pathway_set_na) > 0))
+
+
+
+
+
+
+
+# okay now we need to set up the pathway names.
+
+Pathway_desrip <- read.table("~/Private/Sequences/Redo_Combined_Data/deblur/Freq_filt_18/rarified_table/raw_rare_tab/picrust2_out_pipeline/metacyc_pathways_info.txt", header=F, sep="\t", check.names = F, comment="", quote = "", stringsAsFactors = F)
+
+
+
+Pathway_matchs <- match(rownames(Filt_Coef_Valid_Pathway_set_na), Pathway_desrip$V1)
+
+Pathway_desrip$V2[Pathway_matchs]
+
+rownames(Filt_Coef_Valid_Pathway_set_na) <- Pathway_desrip$V2[Pathway_matchs]
+rownames(Filt_Coef_Valid_Pathway_set_na)
+
+#fix some rownames
+rownames(Filt_Coef_Valid_Pathway_set_na)[128] <- "UDP-N-acetylglucosamine-derived O-antigen block biosynthesis"
+rownames(Filt_Coef_Valid_Pathway_set_na)[113] <- "UDP-2,3-diacetamido-2,3-dideoxy-alpha;-D-mannuronate biosynthesis"
+rownames(Filt_Coef_Valid_Pathway_set_na)[74] <- "Geranylgeranyldiphosphate biosynthesis I (via mevalonate)"
+
+
+
+Remove_low_Coef <- HealthyOralMicrobiome::Final_data_for_fig4
+
+Filt_Coef_Valid_Pathway_set_na_coef_filt <- Filt_Coef_Valid_Pathway_set_na[rownames(Remove_low_Coef),]
+
+
+
+colnames(Remove_low_Coef) <- c("A_SDC_AGE_CALC", "PM_STANDING_HEIGHT_AVG", "PM_WAIST_HIP_RATIO", "PM_BIOIMPED_FFM",
+                               "SALT_SEASONING", "NUT_VEG_DAY_QTY", "REFINED_GRAIN_SERVINGS_DAY_QTY", "A_SLE_LIGHT_EXP", 
+                               "A_SDC_GENDER")
+ 
+colnames(Remove_low_Coef)
+
+#filter out the column names
+Filt_Coef_Valid_Pathway_set_na_coef_filt <- Filt_Coef_Valid_Pathway_set_na_coef_filt[,colnames(Remove_low_Coef)]
+
+identical(rownames(Filt_Coef_Valid_Pathway_set_na_coef_filt), rownames(Remove_low_Coef))
+identical(colnames(Filt_Coef_Valid_Pathway_set_na_coef_filt), colnames(Remove_low_Coef))
+
+
+### okay now filter them out...
+Filt_Coef_Valid_Pathway_set_na_coef_filt[Remove_low_Coef == 0] <- 0
+
+
+#remove features that have no significant features
+Col_Filt_Coef_Valid_Pathway_set_na_coef_filt <- Filt_Coef_Valid_Pathway_set_na_coef_filt[,-which(colSums(Filt_Coef_Valid_Pathway_set_na_coef_filt)==0)]
+
+
+
+breaks=seq(-0.3, 0.3, length.out = 300)
+mycol <- colorpanel(n=length(breaks),low="blue",mid="white",high="brown")
+
+Path_layout_mat <- rbind(c(0,4,0), c(2,1,3), c(0,0,0))
+Path_lwid=c(.1,1.5,.15)
+Path_lhei=c(.1,1.5,1)
+
+
+
+
+colnames(Col_Filt_Coef_Valid_Pathway_set_na_coef_filt) <- c("Age", "Height", "Waist Hip Ratio", "Refined Grain Servings")
+
+Pathway_heat <- heatmap.2(as.matrix(t(Col_Filt_Coef_Valid_Pathway_set_na_coef_filt)), density.info = "none", symkey = F, trace="none",
+                          dendrogram = "none", key.xlab = "log odds", key=T, col=mycol, lmat = Path_layout_mat, lwid = Path_lwid, lhei = Path_lhei, cexRow = 1.5,
+                          srtCol =75, cexCol = 1.2)
+
+Path_layout_mat <- rbind(c(0,0,0), c(2,1,3), c(0,0,4))
+Path_lwid=c(.1,1.5,1)
+Path_lhei=c(.1,1.5,.45)
+
+Pathway_heat <- heatmap.2(as.matrix(t(Col_Filt_Coef_Valid_Pathway_set_na_coef_filt)), density.info = "none", symkey = T, trace="none",
+                          dendrogram = "none", key.xlab = "log odds", key=T, col=mycol, lmat = Path_layout_mat, lwid = Path_lwid, lhei = Path_lhei, cexRow = .9,
+                          srtCol =75, cexCol = 1.2)
+
+
+```

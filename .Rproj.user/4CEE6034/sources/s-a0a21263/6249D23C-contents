@@ -1,0 +1,193 @@
+---
+title: "Predicting_Responses_to_Taxel"
+author: "Jacob T. Nearing"
+date: "4/15/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+## load in libraries we need to do the analysis
+library(DMwR)
+library(RandomForestUtils)
+library(randomForest)
+library(forcats)
+
+### Load in curated genelist
+Mo_genelist <- read.table("~/projects/Taxol-Mo-Project/Datasets/genelist/mo_genelist_edit.txt", stringsAsFactors = F)
+
+### load in datasets
+Dataset_A <- read.table("~/projects/Taxol-Mo-Project/Datasets/exp_tables/GSE20194_table.txt", sep="\t", quote="", header=T, row.names = 1)
+Dataset_A <- data.frame(t(Dataset_A))
+Dataset_B <- read.table("~/projects/Taxol-Mo-Project/Datasets/exp_tables/GSE25055_table.txt", sep="\t", quote="", header=T, row.names = 1)
+Dataset_B <- data.frame(t(Dataset_B))
+
+
+### Set up curated dataset
+Mo_dataset_A <- Dataset_A[,Mo_genelist$V1]
+Mo_dataset_B <- Dataset_B[,Mo_genelist$V1]
+
+### load in drug responses
+Class_A <- read.table("~/projects/Taxol-Mo-Project/Datasets/outcomes/GSE20194.txt", sep="\t", quote = "", header=F, row.names=1)
+
+
+Class_B <- read.table("~/projects/Taxol-Mo-Project/Datasets/outcomes/GSE25055.txt", sep="\t", quote = "", header=F, row.names=1)
+
+### we will set cases as those that are responding and set controls as those that are resistant
+Class_A$classes <- fct_recode(Class_A$V2, Case="Responding", Control="Resistant")
+Class_B$classes <- fct_recode(Class_B$V2, Case="Responding", Control="Resistant")
+```
+
+
+## Within dataset accuracy
+
+```{r cars}
+## set up savepath for results
+SAVE_PATH <- "~/projects/Taxol-Mo-Project/RF_Results/GSE20194/smote/"
+
+##set seeds for data splitting
+set.seed(1995)
+seeds <- sample.int(10000000, 1000)
+
+## set number of cores we want to use...
+RandomForestUtils::set_cores(75)
+
+#we will evalute each model using ROC
+#we will do smote sampling due to the fairly large class imbalnce
+#we will try 4 different values of mtry
+#use 1001 trees
+#3 folds
+#repeat datasplitting 5 times
+#0.8 of the data will be used for training in each case
+curated_dataset_A <- RandomForestUtils::Run_RF_Pipeline(feature_table = Mo_dataset_A,
+                                                 classes=Class_A$classes,
+                                                 metric = "ROC",
+                                                 sampling="smote",
+                                                 repeats=100,
+                                                 path=SAVE_PATH,
+                                                 nmtry=4,
+                                                 ntree=1001,
+                                                 nfolds=3,
+                                                 ncrossrepeats = 5,
+                                                 pro=0.8,
+                                                 list_of_seeds = seeds)
+
+
+curated_dataset_A[[2]]
+mean(curated_dataset_A[[2]])
+Roc_curve <- generate_ROC_curve(RF_models = curated_dataset_A[[5]], dataset=Mo_dataset_A, labels = Class_A, "Performance of Curated Gene list Dataset A")
+Roc_curve
+
+
+
+## now run all datasets
+SAVE_PATH <- "~/projects/Taxol-Mo-Project/RF_Results/GSE20194/smote/All_Genes/"
+# same settings as before except we will only use 10 repeats due to time constrants
+All_genes_dataset_A <- RandomForestUtils::Run_RF_Pipeline(feature_table = Dataset_A,
+                                                 classes=Class_A$classes,
+                                                 metric = "ROC",
+                                                 sampling="smote",
+                                                 repeats=10,
+                                                 path=SAVE_PATH,
+                                                 nmtry=4,
+                                                 ntree=1001,
+                                                 nfolds=3,
+                                                 ncrossrepeats = 5,
+                                                 pro=0.8,
+                                                 list_of_seeds = seeds)
+
+
+All_genes_dataset_A[[2]]
+mean(All_genes_dataset_A[[2]])
+all_data_ROC <- generate_ROC_curve(RF_models = All_genes_dataset_A[[5]], dataset=Dataset_A, labels = Class_A, "Performance of all genes dataset B")
+all_data_ROC
+
+
+### random gene list
+
+ncol(Dataset_A)
+random_genes1 <- sample(1:ncol(Dataset_A), size=18)
+random_genes1
+
+Random_genes1_model <- random_genes1_data <- Dataset_A[,random_genes1]
+
+SAVE_PATH <- "~/projects/Taxol-Mo-Project/RF_Results/GSE20194/smote/random_gene1/smote/"
+
+random_Gene_model1 <- RandomForestUtils::Run_RF_Pipeline(feature_table = Random_genes1_model,
+                                                 classes=Class_A$classes,
+                                                 metric = "ROC",
+                                                 sampling="smote",
+                                                 repeats=10,
+                                                 path=SAVE_PATH,
+                                                 nmtry=4,
+                                                 ntree=1001,
+                                                 nfolds=3,
+                                                 ncrossrepeats = 5,
+                                                 pro=0.8,
+                                                 list_of_seeds = seeds)
+
+random_gene1_ROC <- generate_ROC_curve(RF_models= random_Gene_model1[[5]], dataset=Random_genes1_model, labels = Class_A, "Random Gene selection1 Performance")
+random_gene1_ROC
+
+
+
+random_gene2 <- sample(1:ncol(Dataset_A), size = 18)
+random_gene2_dataset <- Dataset_A[,random_gene2]
+
+random_gene2_model <- RandomForestUtils::Run_RF_Pipeline(feature_table = random_gene2_dataset,
+                                                 classes=Class_A$classes,
+                                                 metric = "ROC",
+                                                 sampling="smote",
+                                                 repeats=10,
+                                                 path=SAVE_PATH,
+                                                 nmtry=4,
+                                                 ntree=1001,
+                                                 nfolds=3,
+                                                 ncrossrepeats = 5,
+                                                 pro=0.8,
+                                                 list_of_seeds = seeds)
+
+
+random_gene2_ROC <- generate_ROC_curve(random_gene2_model[[5]], random_gene2_dataset, labels = Class_A, "Random Gene selection2 Performance")
+random_gene2_ROC
+
+random_gene3 <- sample(1:ncol(Dataset_A), 18)
+random_gene3_dataset <- Dataset_A[,random_gene3]
+
+random_gene3_model <- RandomForestUtils::Run_RF_Pipeline(feature_table = random_gene3_dataset,
+                                                 classes=Class_A$classes,
+                                                 metric = "ROC",
+                                                 sampling="smote",
+                                                 repeats=10,
+                                                 path=SAVE_PATH,
+                                                 nmtry=4,
+                                                 ntree=1001,
+                                                 nfolds=3,
+                                                 ncrossrepeats = 5,
+                                                 pro=0.8,
+                                                 list_of_seeds = seeds)
+
+
+random_gene3_model[[2]]
+
+random_gene3_ROC <- generate_ROC_curve(RF_models = random_gene3_model[[5]], random_gene3_dataset, labels = Class_A, "Random Gene Selection3 Performance")
+
+random_gene3_ROC
+random_gene3_model[[5]]
+
+
+
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

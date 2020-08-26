@@ -1,0 +1,274 @@
+---
+title: "Core_Microbiome"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Core_Microbiome}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r setup}
+library(HealthyOralMicrobiome)
+
+```
+
+
+```{r, eval=T, load_in_data}
+#Load in metadata
+Metadata <- HealthyOralMicrobiome::Healthy_Metadata
+dim(Metadata)
+
+
+
+ASV_Rare <- HealthyOralMicrobiome::Healthy_ASV_table_Rare
+dim(ASV_Rare)
+
+
+
+Genus_Rare <- HealthyOralMicrobiome::Healthy_Genus_Rare
+
+```
+
+
+
+```{r, eval=T, Genus_Analysis}
+
+
+### Convert Genus to R.A
+
+complete_genus_RA <- sweep(Genus_Rare, 2, colSums(Genus_Rare), '/')
+
+core_list <- list()
+core_list[[1]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.05)
+core_list[[2]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.1)
+core_list[[3]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.15)
+core_list[[4]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.20)
+core_list[[5]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.25)
+core_list[[6]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.30)
+core_list[[7]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.35)
+core_list[[8]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.4)
+core_list[[9]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.45)
+core_list[[10]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.5)
+core_list[[11]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.55)
+core_list[[12]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.6)
+core_list[[13]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.65)
+core_list[[14]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.70)
+core_list[[15]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.75)
+core_list[[16]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.80)
+core_list[[17]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.85)
+core_list[[18]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.90)
+core_list[[19]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.95)
+core_list[[20]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.96)
+core_list[[21]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.97)
+core_list[[22]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.98)
+core_list[[23]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 0.99)
+core_list[[24]] <- HealthyOralMicrobiome::get_core_features(complete_genus_RA, 1)
+
+core_abundance <- vector()
+
+for(i in core_list){
+  
+  cor_RA <- complete_genus_RA[i,]
+  core_abundance <- c(core_abundance, mean(colSums(cor_RA)))
+  
+}
+
+num_genus <- vector()
+
+for(i in 1:length(core_list)){
+  
+  num_genus[[i]] <- length(which(core_list[[i]]))
+  
+}
+
+cutoffs <- c(.05, 0.1, 0.15, .2, .25, .3, .35, .4, .45, .5, .55, .6, .65, .7, .75, 0.80, 0.85, 0.90, 0.95, 0.96, 0.97, 0.98, 0.99, 1)
+
+
+
+
+```
+
+```{r, eval=T, ASV_Analysis}
+complete_ASV_RA <- sweep(ASV_Rare, 2, colSums(ASV_Rare), '/')
+
+core_list_ASV <- list()
+core_list_ASV[[1]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.05)
+core_list_ASV[[2]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.1)
+core_list_ASV[[3]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.15)
+core_list_ASV[[4]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.20)
+core_list_ASV[[5]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.25)
+core_list_ASV[[6]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.30)
+core_list_ASV[[7]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.35)
+core_list_ASV[[8]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.4)
+core_list_ASV[[9]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.45)
+core_list_ASV[[10]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.5)
+core_list_ASV[[11]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.55)
+core_list_ASV[[12]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.6)
+core_list_ASV[[13]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.65)
+core_list_ASV[[14]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.70)
+core_list_ASV[[15]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.75)
+core_list_ASV[[16]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.80)
+core_list_ASV[[17]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.85)
+core_list_ASV[[18]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.90)
+core_list_ASV[[19]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.95)
+core_list_ASV[[20]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.96)
+core_list_ASV[[21]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.97)
+core_list_ASV[[22]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.98)
+core_list_ASV[[23]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 0.99)
+core_list_ASV[[24]] <- HealthyOralMicrobiome::get_core_features(complete_ASV_RA, 1)
+
+core_abundance_ASV <- vector()
+
+for(i in core_list_ASV){
+  
+    
+  cor_RA <- complete_ASV_RA[i,]
+  core_abundance_ASV <- c(core_abundance_ASV, mean(colSums(cor_RA)))
+  
+}
+
+num_ASV <- vector()
+for(i in 1:length(core_list_ASV)){
+  
+  num_ASV[[i]] <- length(which(core_list_ASV[[i]]))
+  
+}
+```
+
+```{r, eval=T, Comp_Analysis}
+
+complete_genus_RA <- sweep(Genus_Rare, 2, colSums(Genus_Rare), '/')
+
+#get mean RA for each genus
+Mean_genus_RA <- apply(complete_genus_RA, 1, function(x) mean(x))
+
+#set anything under 1% RA to Other
+other_feat_len <- length(which(Mean_genus_RA <= 0.01))
+
+
+rownames(complete_genus_RA)[which(Mean_genus_RA < 0.01)] <- make.unique(rep("Other", other_feat_len), "_")
+
+rownames(complete_genus_RA) <- gsub(".*;D_4__", "", rownames(complete_genus_RA))
+rownames(complete_genus_RA) <- gsub(";D_5__", " ", rownames(complete_genus_RA))
+
+mean(colSums(complete_genus_RA[grep(' ', rownames(complete_genus_RA)),]))
+
+library(reshape2)
+#load in betadiv to generate PC cords
+W_unifrac <- HealthyOralMicrobiome::get_beta_div("w_unifrac", "whole", Metadata)
+dim(W_unifrac[["Distance"]])
+### PCoA
+W_unifrac_PCoA <- cmdscale(W_unifrac[["Distance"]], k=2, eig=T)
+PC_cords <- W_unifrac_PCoA$points
+identical(rownames(PC_cords), colnames(complete_genus_RA))
+
+
+
+
+melt_complete_genus_RA <- melt(as.matrix(complete_genus_RA))
+
+### squish Others together
+melt_complete_genus_RA$Var1 <- gsub("Other_.*", "Other", melt_complete_genus_RA$Var1)
+
+aggregate(melt_complete_genus_RA$value, by=list(melt_complete_genus_RA$Var2, melt_complete_genus_RA$Var1), function(x) sum(x))
+
+squished_melt_df <- aggregate(melt_complete_genus_RA$value, by=list(melt_complete_genus_RA$Var2, melt_complete_genus_RA$Var1), function(x) sum(x))
+
+#assign PC cords to each samples
+squished_melt_df$PC_cord <- -100
+for(i in 1:length(PC_cords[,1])){
+  for(j in 1:17833){
+    if(squished_melt_df$Group.1[j]==names(PC_cords[,1])[i]){
+      squished_melt_df$PC_cord[j] <- PC_cords[,1][i]
+    }
+  }
+}
+
+library(cowplot)
+library(ggplot2)
+theme_set(theme_cowplot())
+
+## Order each sample based on PC1 coord
+squished_melt_df$sample_num <- as.numeric(as.factor(squished_melt_df$PC_cord))
+
+test <- factor(squished_melt_df$sample_num, levels = 1:1049)
+squished_melt_df$test <- test
+
+cols <- c('#e6194B', '#3cb44b', '#f58231', '#911eb4', '#42d4f4', '#f032e6', '#bfef45', '#fabebe', '#469990', '#e6beff', '#9A6324', '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075', '#a9a9a9')
+
+
+mean_RAs <- aggregate(squished_melt_df$x, by=list(squished_melt_df$Group.2), function(x) mean(x))
+mean_RAs <- mean_RAs[order(mean_RAs$x),]
+mean_RAs
+
+### Names 
+squished_melt_df$Group.2 <- factor(squished_melt_df$Group.2, levels=c("Other", "Veillonellaceae Veillonella", "Neisseriaceae Neisseria",
+                                                              "Streptococcaceae Streptococcus", "Prevotellaceae Prevotella 7", "Pasteurellaceae Haemophilus",
+                                                              "Porphyromonadaceae Porphyromonas", "Fusobacteriaceae Fusobacterium", 
+                                                              "Prevotellaceae Prevotella", "Flavobacteriaceae Capnocytophaga", 
+                                                              "Veillonellaceae Megasphaera", "Carnobacteriaceae Granulicatella",
+                                                              "Leptotrichiaceae Leptotrichia", "Family XI Gemella", "Prevotellaceae Alloprevotella",
+                                                              "Prevotellaceae Prevotella 6", "Actinomycetaceae Actinomyces"))
+
+effect_gg_plot <- ggplot(squished_melt_df, aes(x=test, y=x, fill=Group.2)) + geom_bar(stat="identity", width=1) + theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(), axis.line.x = element_blank(), axis.line.y=element_blank(), axis.title.x = element_text(vjust=10)) + scale_fill_manual(values = cols) +xlab("Sample") +ylab("Relative Abundance") + labs(fill="Genera")
+effect_gg_plot
+
+```
+
+```{r, eval=T, plot_data}
+
+library(ggplot2)
+library(cowplot)
+
+ASV_df <- data.frame(Relative_Abundance=core_abundance_ASV,
+                     Presence_cutoff=cutoffs,
+                     num_ASVs=num_ASV)
+
+Genus_df <- data.frame(Relative_Abundance=core_abundance,
+                       Presence_cutoff=cutoffs,
+                       num_genus=num_genus)
+
+
+
+theme_set(theme_cowplot())
+
+ASV_plot <- ggplot(ASV_df, aes(x=Presence_cutoff, y=Relative_Abundance)) + geom_point() + xlab("Presence cutoff") + ylab("Relative Abundance") +
+  ggtitle("Amplicon Sequence Variants") + ylim(c(0,1))
+ASV_plot
+
+Genus_plot <- ggplot(Genus_df, aes(x=Presence_cutoff, y=Relative_Abundance)) + geom_point() + xlab("Presence cutoff") + ylab("Relative Abundance") +
+  ggtitle("Genus") + ylim(c(0,1))
+Genus_plot
+
+
+ASV_plot_number <- ggplot(ASV_df[-c(1:9),], aes(x=Presence_cutoff, y=num_ASVs)) + geom_point() + xlab("Presence cutoff") + ylab("Number of ASVs") +
+  ggtitle("Amplicon Sequence Variants")
+ASV_plot_number
+
+subpanel1 <- plot_grid(Genus_plot, ASV_plot, labels=c("B", "C"), ncol=1)
+
+Genus_plot_number <- ggplot(Genus_df[-c(1:9),], aes(x=Presence_cutoff, y=num_genus)) + geom_point() + xlab("Presence cutoff") + ylab("Number of Genera") +
+  ggtitle("Genus")
+
+Genus_plot_number
+
+library(cowplot)
+theme_set(theme_cowplot())
+
+sup_fig_2 <- plot_grid(Genus_plot_number, ASV_plot_number, labels = c("B", "C"), ncol=1)
+
+sup_fig_2
+
+### Final plot
+
+Figure1 <- plot_grid(effect_gg_plot, subpanel1, labels = c("A", ""))
+Figure1
+
+```

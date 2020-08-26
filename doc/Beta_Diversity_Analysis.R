@@ -1,0 +1,457 @@
+## ---- include = FALSE----------------------------------------------------
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+## ----setup---------------------------------------------------------------
+library(HealthyOralMicrobiome)
+library(vegan)
+
+## ---- eval=T, load_data--------------------------------------------------
+#Load in metadata
+Metadata <- HealthyOralMicrobiome::Healthy_Metadata
+dim(Metadata)
+
+W_unifrac <- HealthyOralMicrobiome::get_beta_div("w_unifrac", "complete", Metadata)
+Bray_curt <- HealthyOralMicrobiome::get_beta_div("bray_curtis", "complete", Metadata)
+
+
+## ----eval=F--------------------------------------------------------------
+#  
+#  Comp_W_unifrac_res <- list()
+#  
+#  for(feat in colnames(W_unifrac[["Metadata"]][-ncol(W_unifrac[["Metadata"]])])){
+#    message(feat)
+#    set.seed(1995)
+#    Comp_W_unifrac_res[[feat]] <- adonis2(W_unifrac[["Distance"]] ~ W_unifrac[["Metadata"]]$Extraction_Number + W_unifrac[["Metadata"]][,feat], parallel = 40, by="margin", permutations = 1000)
+#  }
+#  
+#  
+#  Comp_Bray_curt_res <- list()
+#  
+#  
+#  for(feat in colnames(Bray_curt[["Metadata"]][-ncol(Bray_curt[["Metadata"]])])){
+#    message(feat)
+#    set.seed(1995)
+#    Comp_Bray_curt_res[[feat]] <- adonis2(Bray_curt[["Distance"]] ~ Bray_curt[["Metadata"]]$Extraction_Number + Bray_curt[["Metadata"]][,feat], parallel = 40,
+#                                          by="margin", permutations = 1000)
+#  
+#  }
+#  
+
+## ---- eval=T, Weighted_UniFrac_Analysis----------------------------------
+Weighted_Uni_res <- HealthyOralMicrobiome::Comp_W_unifrac_res
+
+w_uni_p <- vector()
+
+for(feat in names(Weighted_Uni_res)){
+  
+  w_uni_p[[feat]] <- Weighted_Uni_res[[feat]]$`Pr(>F)`[2]
+  
+}
+
+
+w_uni_p
+
+w_uni_fdr <- p.adjust(w_uni_p, method="fdr")
+
+w_uni_fdr
+weighted_sig_feats <- names(which(w_uni_fdr < 0.1))
+
+
+
+
+weighted_R2_vals <- vector()
+for(feat in names(Weighted_Uni_res)){
+  
+  weighted_R2_vals[[feat]] <- Weighted_Uni_res[[feat]]$R2[2]
+}
+
+
+sig_r2_vals <- weighted_R2_vals[which(names(weighted_R2_vals) %in% weighted_sig_feats)]
+sig_r2_vals
+
+
+sig_p_vals <- w_uni_p[which(names(w_uni_p) %in% weighted_sig_feats)]
+sig_p_vals
+
+sig_q_vals <- w_uni_fdr[which(names(w_uni_fdr) %in% weighted_sig_feats)]
+sig_q_vals
+
+
+table2 <- data.frame("p "=sig_p_vals,
+                     "q "=sig_q_vals,
+                     "R2"=sig_r2_vals, check.names = F)
+
+
+
+rownames(table2) <- c("Waist Size", "Waist Hip Ratio", "Height", "Weight", "Age", "Sex", "Sleeping Light Exposure", "Vegetable Servings", "Refined Grain Servings", "Nut/Seed Servings", "Salt Usage", "Fat Free Mass")
+
+table2$Feature <- rownames(table2)
+table2$Type <- c("Anthropometric", "Anthropometric", "Anthropometric", "Anthropometric", "Age", "Sex", "Life Style", "Diet", "Diet", "Diet", "Diet", "Anthropometric")
+
+library(ggplot2)
+library(cowplot)
+theme_set(theme_classic())
+
+table2$color <- "black"
+
+
+for(i in 1:length(table2$Type)){
+  
+  if(table2$Type[i]=="Age"){
+    table2$color[i] <- "Red"
+  }else if(table2$Type[i]=="Anthropometric"){
+    table2$color[i] <- "Purple"
+  }else if(table2$Type[i]=="Diet"){
+    table2$color[i] <- "Blue"
+  }else if(table2$Type[i]=="Life Style"){
+    table2$color[i] <- "Orange"
+  }else if(table2$Type[i]=="Sex"){
+    table2$color[i] <- "Pink"
+  }else if(table2$Type[i]=="Life Style"){
+    table2$color[i] <- "Green"
+  }
+  
+}
+
+table2$Feature <- factor(table2$Feature, levels = table2$Feature[order(table2$R2, decreasing = T)])
+
+
+effect_size_plot <- ggplot(table2, aes(x=Feature, y=R2, fill=color)) + geom_bar(stat="identity") + coord_flip() +
+  facet_grid(row=as.factor(table2$Type), scales="free", space="free") + ggtitle("Weighted UniFrac Effect Sizes") + 
+  theme(plot.title = element_text(hjust=0.5)) + theme(strip.background = element_blank(), strip.text.y = element_blank()) +
+  guides(fill=guide_legend(title="Type")) + scale_fill_identity(guide="legend", labels=c("Diet", "Life Style", "Sex", "Anthropometric", "Age"))
+ 
+effect_size_plot
+
+
+#total variation explained = 7.00%
+
+### make biplot
+
+weighted_uni_pcoa <- cmdscale(W_unifrac[["Distance"]], k=2, eig=T)
+
+#convert gender to numberic for complete_df
+df_env <- W_unifrac[["Metadata"]]
+table(df_env$A_SDC_GENDER)
+df_env$A_SDC_GENDER <- as.numeric(as.character(df_env$A_SDC_GENDER))
+df_env$A_SDC_GENDER
+env_fit <- envfit(weighted_uni_pcoa ~ ., data=df_env[,weighted_sig_feats])
+
+
+comp1 <- weighted_uni_pcoa$eig[1]/sum(weighted_uni_pcoa$eig)
+comp1
+comp2  <- weighted_uni_pcoa$eig[2]/sum(weighted_uni_pcoa$eig)
+comp2
+
+barplot(weighted_uni_pcoa$eig[1:20])
+
+Weighted_PC_cords <- weighted_uni_pcoa$points
+#save for composition barplot later...
+
+
+theme_set(theme_cowplot())
+plot_data_weight <- data.frame(PC1=weighted_uni_pcoa$points[,1], PC2=weighted_uni_pcoa$points[,2])
+
+#get vectors
+
+vec.sp.df <- as.data.frame(env_fit$vectors$arrows*sqrt(sig_r2_vals)*4)
+sig_r2_vals
+vec.sp.df$species <- c("Waist Size", "Waist Hip Ratio", "Height", "Weight", "Age", "Female", "Sleeping Light Exposure", "Vegetable Servings", "Refined Grain Servings", "Nut/Seed Servings",
+"Salt Usage", "Fat Free Mass")
+library(ggrepel)
+weighted_uni_gg_bi <- ggplot(data = plot_data_weight, aes(PC1, PC2)) + geom_point(colour="black", alpha=0.5) + coord_fixed() +
+  geom_segment(data=vec.sp.df, aes(x=0, xend=Dim1, y=0, yend=Dim2), arrow = arrow(length = unit(0.5, "cm")), colour="red") +
+  geom_text_repel(data=vec.sp.df, aes(x=Dim1, y=Dim2+.015, label=species), size=4) + xlab("PC1 48.40%") + ylab("PC2 18.86%") + ggtitle("Weighted UniFrac")
+
+weighted_uni_gg_bi
+
+library(cowplot)
+
+panel1 <- plot_grid(weighted_uni_gg_bi, effect_size_plot, labels = c("A", "B"), rel_widths = c(2,1))
+panel1
+
+## ---- eval=F, modelselection---------------------------------------------
+#  ### Model Selection
+#  set.seed(1995)
+#  full_model_weighted <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + PM_WAIST_AVG + PM_WAIST_HIP_RATIO + PM_STANDING_HEIGHT_AVG +
+#                                   PM_BIOIMPED_WEIGHT + A_SDC_AGE_CALC + A_SDC_GENDER + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY +
+#                                   NUTS_SEEDS_SERVINGS_PER_DAY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  #get variable with highest P-value
+#  full_model_weighted
+#  max(full_model_weighted$`Pr(>F)`, na.rm=T)
+#  rownames(full_model_weighted)[which(full_model_weighted$`Pr(>F)`==max(full_model_weighted$`Pr(>F)`, na.rm = T))]
+#  #remove weight
+#  
+#  set.seed(1995)
+#  model_weighted2 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + PM_WAIST_AVG + PM_WAIST_HIP_RATIO + PM_STANDING_HEIGHT_AVG + A_SDC_AGE_CALC + A_SDC_GENDER + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY +
+#                                   NUTS_SEEDS_SERVINGS_PER_DAY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  
+#  max(model_weighted2$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted2)[which(model_weighted2$`Pr(>F)`==max(model_weighted2$`Pr(>F)`, na.rm = T))]
+#  ## remove height
+#  
+#  set.seed(1995)
+#  model_weighted3 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + PM_WAIST_AVG + PM_WAIST_HIP_RATIO + A_SDC_AGE_CALC + A_SDC_GENDER + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY +
+#                                   NUTS_SEEDS_SERVINGS_PER_DAY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(model_weighted3$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted3)[which(model_weighted3$`Pr(>F)`==max(model_weighted3$`Pr(>F)`, na.rm = T))]
+#  #remove waist
+#  
+#  set.seed(1995)
+#  model_weighted4 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + PM_WAIST_HIP_RATIO + A_SDC_AGE_CALC + A_SDC_GENDER + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY +
+#                                   NUTS_SEEDS_SERVINGS_PER_DAY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(model_weighted4$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted4)[which(model_weighted4$`Pr(>F)`==max(model_weighted4$`Pr(>F)`, na.rm = T))]
+#  #Gender
+#  
+#  set.seed(1995)
+#  model_weighted5 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + PM_WAIST_HIP_RATIO + A_SDC_AGE_CALC + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY +
+#                                   NUTS_SEEDS_SERVINGS_PER_DAY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(model_weighted5$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted5)[which(model_weighted5$`Pr(>F)`==max(model_weighted5$`Pr(>F)`, na.rm = T))]
+#  #nuts seeds
+#  
+#  set.seed(1995)
+#  model_weighted6 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + PM_WAIST_HIP_RATIO + A_SDC_AGE_CALC + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(model_weighted6$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted6)[which(model_weighted6$`Pr(>F)`==max(model_weighted6$`Pr(>F)`, na.rm = T))]
+#  
+#  set.seed(1995)
+#  model_weighted7 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + A_SDC_AGE_CALC + NUT_VEG_DAY_QTY + REFINED_GRAIN_SERVINGS_DAY_QTY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(model_weighted7$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted7)[which(model_weighted7$`Pr(>F)`==max(model_weighted7$`Pr(>F)`, na.rm = T))]
+#  #remove veg
+#  
+#  set.seed(1995)
+#  model_weighted8 <- adonis2(W_unifrac[["Distance"]] ~ Extraction_Number + A_SDC_AGE_CALC + REFINED_GRAIN_SERVINGS_DAY_QTY + SALT_SEASONING + PM_BIOIMPED_FFM + A_SLE_LIGHT_EXP, parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(model_weighted8$`Pr(>F)`, na.rm=T)
+#  rownames(model_weighted8)[which(model_weighted8$`Pr(>F)`==max(model_weighted8$`Pr(>F)`, na.rm = T))]
+#  
+#  model_weighted8
+
+## ---- eval=T, bray_curtis_analysis---------------------------------------
+Bray_curt_res <- HealthyOralMicrobiome::Comp_Bray_curt_res
+
+bray_p_vals <- vector()
+
+
+for(feat in names(Bray_curt_res)){
+  
+  bray_p_vals[[feat]] <- Bray_curt_res[[feat]]$`Pr(>F)`[2]
+  
+}
+
+
+
+bray_q_vals <- p.adjust(bray_p_vals, method="fdr")
+
+bray_sig_feats <- names(which(bray_q_vals < 0.1))
+bray_sig_feats
+
+bray_r2_vals <- vector()
+for(feat in names(Bray_curt_res)){
+  
+  bray_r2_vals[[feat]] <- Bray_curt_res[[feat]]$R2[2]
+  
+}
+
+bray_sig_r2_vals <- bray_r2_vals[which(names(bray_r2_vals) %in% bray_sig_feats)]
+bray_sig_r2_vals
+
+
+bray_sig_p_vals <- bray_p_vals[which(names(bray_p_vals) %in% bray_sig_feats)]
+bray_sig_p_vals
+
+bray_sig_q_vals <- bray_q_vals[which(names(bray_q_vals) %in% bray_sig_feats)]
+bray_sig_q_vals
+
+
+bray_table2 <- data.frame("p "=bray_sig_p_vals,
+                     "q "=bray_sig_q_vals,
+                     "R2"=bray_sig_r2_vals, check.names = F)
+
+rownames(bray_table2)
+rownames(bray_table2) <- c("Last Dental Visit", "Body Mass Index", "Waist Size", "Waist Hip Ratio", "Height", "Weight", "Age", 
+                           "Sex", "Sleeping Light Exposure", "Vegetable Servings", "Juice Servings", "Refined Grain Servings", "Fat Free Mass")
+
+bray_table2$Feature <- rownames(bray_table2)
+
+
+bray_table2$Type <- c("Life Style", "Anthropometric", "Anthropometric", "Anthropometric", 
+                      "Anthropometric", "Anthropometric", "Age", "Sex", 
+                      "Life Style", "Diet", "Diet", "Diet", 
+                      "Anthropometric")
+
+bray_table2$color <- "black"
+
+for(i in 1:length(bray_table2$Type)){
+  
+  if(bray_table2$Type[i]=="Age"){
+    bray_table2$color[i] <- "Red"
+  }else if(bray_table2$Type[i]=="Anthropometric"){
+    bray_table2$color[i] <- "Purple"
+  }else if(bray_table2$Type[i]=="Diet"){
+    bray_table2$color[i] <- "Blue"
+  }else if(bray_table2$Type[i]=="Life Style"){
+    bray_table2$color[i] <- "Orange"
+  }else if(bray_table2$Type[i]=="Sex"){
+    bray_table2$color[i] <- "Pink"
+  }else if(bray_table2$Type[i]=="Life Style"){
+    bray_table2$color[i] <- "Green"
+  }
+  
+}
+
+
+theme_set(theme_classic())
+bray_table2$Feature <- factor(bray_table2$Feature, levels = bray_table2$Feature[order(bray_table2$R2, decreasing = T)])
+
+
+bray_effect_size_plot <- ggplot(bray_table2, aes(x=Feature, y=R2, fill=color)) + geom_bar(stat="identity") + coord_flip() +
+  facet_grid(row=as.factor(bray_table2$Type), scales="free", space="free") + ggtitle("Bray Curtis Effect Sizes") + 
+  theme(plot.title = element_text(hjust=0.5)) + theme(strip.background = element_blank(), strip.text.y = element_blank()) +
+  guides(fill=guide_legend(title="Type")) + scale_fill_identity(guide="legend", labels=c("Diet", "Life Style", "Sex", "Anthropometric", "Age"))
+ 
+bray_effect_size_plot
+
+### biplot
+
+bray_curt_pcoa <- cmdscale(Bray_curt[["Distance"]], k=2, eig=T)
+
+#convert gender to numberic for complete_df
+bray_df_env <- Bray_curt[["Metadata"]]
+table(bray_df_env$A_SDC_GENDER)
+bray_df_env$A_SDC_GENDER <- as.numeric(as.character(bray_df_env$A_SDC_GENDER))
+bray_df_env$A_SDC_GENDER
+bray_env_fit <- envfit(bray_curt_pcoa ~ ., data=bray_df_env[,bray_sig_feats])
+
+
+comp1 <- bray_curt_pcoa$eig[1]/sum(bray_curt_pcoa$eig)
+comp1
+comp2  <- bray_curt_pcoa$eig[2]/sum(bray_curt_pcoa$eig)
+comp2
+
+barplot(bray_curt_pcoa$eig[1:20])
+
+Bray_PC_cords <- bray_curt_pcoa$points
+#save for composition barplot later...
+
+
+theme_set(theme_cowplot())
+bray_plot_data_weight <- data.frame(PC1=bray_curt_pcoa$points[,1], PC2=bray_curt_pcoa$points[,2])
+
+#get vectors
+
+bray_vec.sp.df <- as.data.frame(bray_env_fit$vectors$arrows*sqrt(bray_sig_r2_vals)*4)
+rownames(bray_vec.sp.df)
+bray_vec.sp.df$species <- c("Last Dental Visit", "Body Mass Index", "Waist Size", "Waist Hip Ratio", "Height",
+                       "Weight", "Age", "Female", "Sleeping Light Exposure", "Vegetable Servings", 
+                       "Juice Servings", "Refined Grain Servings", "Fat Free Mass")
+library(ggrepel)
+bray_curt_gg_bi <- ggplot(data = bray_plot_data_weight, aes(PC1, PC2)) + geom_point(colour="black", alpha=0.5) + coord_fixed() +
+  geom_segment(data=bray_vec.sp.df, aes(x=0, xend=Dim1, y=0, yend=Dim2), arrow = arrow(length = unit(0.5, "cm")), colour="red") +
+  geom_text_repel(data=bray_vec.sp.df, aes(x=Dim1, y=Dim2+.015, label=species), size=4) + xlab("PC1 48.40%") + ylab("PC2 18.86%") + ggtitle("Bray Curtis")
+
+bray_curt_gg_bi
+
+panel2 <- plot_grid(bray_curt_gg_bi, bray_effect_size_plot, labels = c("C", "D"), rel_widths = c(2, 1))
+panel2
+
+
+Figure2 <- plot_grid(panel1, panel2, ncol = 1)
+Figure2
+
+## ---- eval=F, model_selection--------------------------------------------
+#  ### model selection
+#  
+#  ### Model Selection
+#  bray_sig_feats
+#  set.seed(1995)
+#  full_model_bray <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST + PM_BIOIMPED_BMI +
+#                               PM_WAIST_AVG + PM_WAIST_HIP_RATIO + PM_STANDING_HEIGHT_AVG + PM_BIOIMPED_WEIGHT +
+#                               A_SDC_AGE_CALC + A_SDC_GENDER + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(full_model_bray$`Pr(>F)`, na.rm=T)
+#  rownames(full_model_bray)[which(full_model_bray$`Pr(>F)`==max(full_model_bray$`Pr(>F)`, na.rm = T))]
+#  
+#  ### remove waist avg
+#  
+#  set.seed(1995)
+#  bray_model_2 <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST + PM_BIOIMPED_BMI + PM_WAIST_HIP_RATIO + PM_STANDING_HEIGHT_AVG + PM_BIOIMPED_WEIGHT +
+#                               A_SDC_AGE_CALC + A_SDC_GENDER + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(bray_model_2$`Pr(>F)`, na.rm=T)
+#  rownames(bray_model_2)[which(bray_model_2$`Pr(>F)`==max(bray_model_2$`Pr(>F)`, na.rm = T))]
+#  
+#  
+#  set.seed(1995)
+#  bray_model_3 <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST + PM_BIOIMPED_BMI + PM_WAIST_HIP_RATIO + PM_BIOIMPED_WEIGHT +
+#                               A_SDC_AGE_CALC + A_SDC_GENDER + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(bray_model_3$`Pr(>F)`, na.rm=T)
+#  rownames(bray_model_3)[which(bray_model_3$`Pr(>F)`==max(bray_model_3$`Pr(>F)`, na.rm = T))]
+#  
+#  
+#  set.seed(1995)
+#  bray_model_4 <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST + PM_BIOIMPED_BMI + PM_WAIST_HIP_RATIO +
+#                               A_SDC_AGE_CALC + A_SDC_GENDER + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(bray_model_4$`Pr(>F)`, na.rm=T)
+#  rownames(bray_model_4)[which(bray_model_4$`Pr(>F)`==max(bray_model_4$`Pr(>F)`, na.rm = T))]
+#  
+#  
+#  
+#  set.seed(1995)
+#  bray_model_5 <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST + PM_WAIST_HIP_RATIO +
+#                               A_SDC_AGE_CALC + A_SDC_GENDER + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(bray_model_5$`Pr(>F)`, na.rm=T)
+#  rownames(bray_model_5)[which(bray_model_5$`Pr(>F)`==max(bray_model_5$`Pr(>F)`, na.rm = T))]
+#  
+#  
+#  set.seed(1995)
+#  bray_model_6 <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST + PM_WAIST_HIP_RATIO +
+#                               A_SDC_AGE_CALC + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  
+#  max(bray_model_6$`Pr(>F)`, na.rm=T)
+#  rownames(bray_model_6)[which(bray_model_6$`Pr(>F)`==max(bray_model_6$`Pr(>F)`, na.rm = T))]
+#  
+#  
+#  
+#  set.seed(1995)
+#  bray_model_7 <- adonis2(Bray_curt[["Distance"]] ~ Extraction_Number + A_HS_DENTAL_VISIT_LAST +
+#                               A_SDC_AGE_CALC + A_SLE_LIGHT_EXP + NUT_VEG_DAY_QTY + NUT_JUICE_DAY_QTY +
+#                               REFINED_GRAIN_SERVINGS_DAY_QTY + PM_BIOIMPED_FFM,
+#                             parallel = 40, permutations = 1000, data=W_unifrac[["Metadata"]], by="margin")
+#  
+#  max(bray_model_7$`Pr(>F)`, na.rm=T)
+#  rownames(bray_model_7)[which(bray_model_7$`Pr(>F)`==max(bray_model_7$`Pr(>F)`, na.rm = T))]
+#  
+#  ### final model
+#  bray_model_7
+#  1-.94130
+
